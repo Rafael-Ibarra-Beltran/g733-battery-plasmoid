@@ -1,0 +1,5 @@
+# Da acceso al usuario con sesión activa al receptor inalámbrico del Logitech G733
+# (046d:0ab5, 046d:0afe y 046d:0b1f, según la versión). Solo se usa para leer la batería.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0ab5", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0afe", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="0b1f", TAG+="uaccess"

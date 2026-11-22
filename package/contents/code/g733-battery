@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Lee la batería de un Logitech G733 a través de su receptor USB inalámbrico.
+
+Imprime JSON en una línea:
+  {"status": "ok|offline|not_found|no_permission|error",
+   "state": "discharging|charging|full|unknown|null",
+   "voltage_mv": int|null, "battery": int|null,
+   "cable": bool,      # cable USB conectado al headset (aparece 046d:0aff)
+   "error": str|null}
+
+Protocolo (HID++, el mismo que usa HeadsetControl para la familia G633/G933/G733):
+se envía al receptor el reporte largo 11 ff 08 0a + 16 ceros y responde
+11 ff 08 0a <voltaje alto> <voltaje bajo> <estado>. Estado: 1 descargando,
+3 cargando, 7 llena (documentado por g933-utils). Si el tercer byte es 0xff,
+el headset está apagado o fuera de alcance.
+
+El headset no da un porcentaje, solo el voltaje. El porcentaje se estima con la
+curva de descarga medida de un G933 (g933-utils), desplazada para que el voltaje
+que este headset reporta cuando dice "llena" sea el 100 %. Ese voltaje se aprende
+solo y se guarda en $XDG_STATE_HOME/g733-battery/state.json.
+
+Uso: g733-battery [--raw]
+"""
+
+import errno
+import glob
+import json
+import os
+import select
+import sys
+import time
+
+VENDOR = 0x046D
+G733_PIDS = {0x0AB5, 0x0AFE, 0x0B1F}
+HIDPP_USAGE_PAGE = bytes([0x06, 0x43, 0xFF])  # Usage Page 0xff43 en el report descriptor
+CHARGER_ID = ("046d", "0aff")  # "G733 Gaming Headset Battery Charger": solo existe con el cable puesto
+REQUEST = bytes([0x11, 0xFF, 0x08, 0x0A]) + bytes(16)
+STATES = {1: "discharging", 3: "charging", 7: "full"}
+MIN_VALID_MV = 3000  # por debajo, el receptor responde sin un dato real (headset apagado)
+FLOOR_MAX_AGE_S = 300  # la última lectura solo sirve de suelo al cargar si es reciente
+
+# Curvas (mV, %) condensadas de libg933/src/maps/0A5B/discharging.csv y
+# charging_ascending.csv de g933-utils (https://github.com/ashkitten/g933-utils),
+# MIT License, Copyright (c) 2019 ash lea. Medidas en un G933.
+DISCHARGE = [
+    (3305, 0), (3536, 5), (3550, 10), (3575, 15), (3584, 20), (3595, 25), (3608, 30),
+    (3619, 35), (3630, 40), (3643, 45), (3660, 50), (3679, 55), (3703, 60), (3733, 65),
+    (3767, 70), (3802, 75), (3835, 80), (3882, 85), (3933, 90), (3978, 95), (4055, 100),
+]
+CHARGE = [
+    (3405, 0), (3859, 5), (3888, 10), (3918, 15), (3945, 20), (3962, 25), (3971, 30),
+    (3979, 35), (3988, 40), (4001, 45), (4018, 50), (4041, 55), (4066, 60), (4091, 65),
+    (4119, 70), (4150, 75), (4185, 80), (4225, 85), (4274, 90),
+]
+CURVE_FULL_MV = DISCHARGE[-1][0]
+
+
+def find_node(class_dir="/sys/class/hidraw"):
+    """Nodo /dev/hidrawN del receptor que habla HID++, o None."""
+    fallback = None
+    for cls in sorted(glob.glob(os.path.join(class_dir, "hidraw*"))):
+        dev = os.path.join(cls, "device")
+        try:
+            with open(os.path.join(dev, "uevent")) as f:
+                hid_id = next(l[7:] for l in f.read().splitlines() if l.startswith("HID_ID="))
+            bus, vid, pid = (int(p, 16) for p in hid_id.split(":"))
+        except (OSError, StopIteration, ValueError):
+            continue
+        if vid != VENDOR or pid not in G733_PIDS:
+            continue
+        node = "/dev/" + os.path.basename(cls)
+        try:
+            with open(os.path.join(dev, "report_descriptor"), "rb") as f:
+                if HIDPP_USAGE_PAGE in f.read():
+                    return node
+        except OSError:
+            pass
+        fallback = fallback or node
+    return fallback
+
+
+def cable_connected(usb_dir="/sys/bus/usb/devices"):
+    for dev in glob.glob(os.path.join(usb_dir, "*")):
+        try:
+            with open(os.path.join(dev, "idVendor")) as v, open(os.path.join(dev, "idProduct")) as p:
+                if (v.read().strip(), p.read().strip()) == CHARGER_ID:
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def is_reply(d):
+    """Respuesta a nuestra petición: 1x ff 08 0a ... o error HID++ 1x ff ff ..."""
+    return len(d) >= 7 and d[0] in (0x10, 0x11) and d[1] == 0xFF and (
+        (d[2] == 0x08 and d[3] == 0x0A) or d[2] == 0xFF)
+
+
+def query(node, timeout=1.0):
+    """Respuesta cruda del receptor, o None si no contesta."""
+    fd = os.open(node, os.O_RDWR | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        for _ in range(2):
+            os.write(fd, REQUEST)
+            deadline = time.monotonic() + timeout / 2
+            while (left := deadline - time.monotonic()) > 0:
+                ready, _, _ = select.select([fd], [], [], left)
+                if not ready:
+                    break
+                try:
+                    d = os.read(fd, 64)
+                except BlockingIOError:
+                    continue
+                if is_reply(d):
+                    return d
+        return None
+    finally:
+        os.close(fd)
+
+
+def interp(curve, mv):
+    """Interpolación lineal en una curva (mV, %) ordenada por voltaje."""
+    if mv <= curve[0][0]:
+        return float(curve[0][1])
+    for (v0, p0), (v1, p1) in zip(curve, curve[1:]):
+        if mv <= v1:
+            return p0 + (p1 - p0) * (mv - v0) / (v1 - v0)
+    return float(curve[-1][1])
+
+
+def learn_full(full_mv, mv):
+    """Voltaje de referencia de "lleno". Justo después de cargar, el headset ya dice
+    "llena" pero el voltaje sale inflado y baja durante unos minutos: se sigue
+    rápido hacia abajo y muy despacio hacia arriba."""
+    if full_mv is None:
+        return float(mv)
+    if mv < full_mv:
+        return 0.5 * full_mv + 0.5 * mv
+    return 0.98 * full_mv + 0.02 * mv
+
+
+def estimate(state, mv, full_mv, last_pct):
+    """Porcentaje estimado. full_mv=None: curva sin desplazar. last_pct: lectura
+    reciente (o None) que sirve de suelo mientras carga."""
+    if state == "full":
+        return 100
+    offset = CURVE_FULL_MV - full_mv if full_mv is not None else 0
+    if state == "charging":
+        # Al cargar el voltaje sube por la propia carga: curva de carga, sin bajar
+        # de la última lectura y sin llegar a 100 hasta que el headset diga "llena".
+        pct = interp(CHARGE, mv + offset)
+        if last_pct is not None:
+            pct = max(pct, last_pct)
+        return min(99, round(pct))
+    return max(0, min(100, round(interp(DISCHARGE, mv + offset))))
+
+
+def state_path():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return os.path.join(base, "g733-battery", "state.json")
+
+
+def load_state(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, path)
+
+
+def main(argv):
+    raw = "--raw" in argv
+    out = {"status": "not_found", "state": None, "voltage_mv": None, "battery": None,
+           "cable": cable_connected(), "error": None}
+    node = find_node()
+    if node is not None:
+        try:
+            d = query(node)
+        except PermissionError:
+            d, out["status"] = None, "no_permission"
+        except OSError as e:
+            d = None
+            if e.errno not in (errno.ENODEV, errno.ENOENT):
+                out.update(status="error", error=str(e))
+        else:
+            if d is None:
+                out.update(status="error", error="el receptor no respondió")
+        if d is not None:
+            if raw:
+                print(node, d[:8].hex(" "), file=sys.stderr)
+            mv = (d[4] << 8) | d[5]
+            if d[2] == 0xFF or mv < MIN_VALID_MV:
+                out["status"] = "offline"
+            else:
+                state = STATES.get(d[6], "unknown")
+                path = state_path()
+                saved = load_state(path)
+                full_mv = saved.get("full_mv")
+                if state == "full" and out["cable"]:
+                    # Solo con el cable puesto: así el valor aprendido es el de "lleno"
+                    # aunque el headset tarde en dejar de decir "llena" al desconectarlo.
+                    full_mv = learn_full(full_mv, mv)
+                now = time.time()
+                recent = now - saved.get("last_ts", 0) <= FLOOR_MAX_AGE_S
+                pct = estimate(state, mv, full_mv, saved.get("last_pct") if recent else None)
+                try:
+                    save_state(path, {"full_mv": full_mv, "last_pct": pct, "last_ts": now})
+                except OSError:
+                    pass
+                out.update(status="ok", state=state, voltage_mv=mv, battery=pct)
+    print(json.dumps(out))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

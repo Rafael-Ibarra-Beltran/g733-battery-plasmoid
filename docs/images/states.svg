@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="822" height="104" viewBox="0 0 822 104">
+<rect width="822" height="104" rx="10" fill="#1b1e20"/>
+<rect x="12" y="12" width="150" height="80" rx="8" fill="#2a2e32" stroke="#3b4045"/>
+<rect x="24" y="22" width="126" height="34" rx="6" fill="#202326"/>
+<g transform="translate(36,30)" fill="none" stroke="#fcfcfc" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 V9 a7 7 0 0 1 14 0 V12"/><rect x="1.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/><rect x="14.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/></g><text x="62" y="45" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#fcfcfc">82%</text>
+<text x="87" y="78" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#a1a9b1" text-anchor="middle">Descargando</text>
+<rect x="174" y="12" width="150" height="80" rx="8" fill="#2a2e32" stroke="#3b4045"/>
+<rect x="186" y="22" width="126" height="34" rx="6" fill="#202326"/>
+<g transform="translate(198,30)" fill="none" stroke="#fcfcfc" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 V9 a7 7 0 0 1 14 0 V12"/><rect x="1.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/><rect x="14.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/></g><path transform="translate(223,30)" d="M9.5 1 L3 10.5 H8 L6.5 19 L14 8.5 H9 Z" fill="#fdbc4b"/><text x="241" y="45" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#fcfcfc">45%</text>
+<text x="249" y="78" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#a1a9b1" text-anchor="middle">Cargando</text>
+<rect x="336" y="12" width="150" height="80" rx="8" fill="#2a2e32" stroke="#3b4045"/>
+<rect x="348" y="22" width="126" height="34" rx="6" fill="#202326"/>
+<g transform="translate(360,30)" fill="none" stroke="#fcfcfc" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 V9 a7 7 0 0 1 14 0 V12"/><rect x="1.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/><rect x="14.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/></g><g transform="translate(385,30)" fill="none" stroke="#a1a9b1" stroke-width="1.8" stroke-linecap="round"><path d="M6 2 V6 M12 2 V6"/><path d="M3.5 6 H14.5 V9 a5.5 5.5 0 0 1 -11 0 Z" fill="#a1a9b1" stroke="none"/><path d="M9 14 V19"/></g><text x="403" y="45" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#fcfcfc">100%</text>
+<text x="411" y="78" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#a1a9b1" text-anchor="middle">Llena, con cable</text>
+<rect x="498" y="12" width="150" height="80" rx="8" fill="#2a2e32" stroke="#3b4045"/>
+<rect x="510" y="22" width="126" height="34" rx="6" fill="#202326"/>
+<g transform="translate(522,30)" fill="none" stroke="#fcfcfc" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 V9 a7 7 0 0 1 14 0 V12"/><rect x="1.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/><rect x="14.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/></g><g transform="translate(546,30)"><rect x="2" y="5" width="14" height="10" rx="2" fill="none" stroke="#da4453" stroke-width="1.8"/><rect x="16.5" y="8" width="2" height="4" rx="0.8" fill="#da4453"/><rect x="4.5" y="7.5" width="3" height="5" rx="0.6" fill="#da4453"/></g><text x="570" y="45" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#da4453">12%</text>
+<text x="573" y="78" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#a1a9b1" text-anchor="middle">Batería baja</text>
+<rect x="660" y="12" width="150" height="80" rx="8" fill="#2a2e32" stroke="#3b4045"/>
+<rect x="672" y="22" width="126" height="34" rx="6" fill="#202326"/>
+<g transform="translate(684,30)" fill="none" stroke="#fcfcfc" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 V9 a7 7 0 0 1 14 0 V12"/><rect x="1.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/><rect x="14.5" y="11" width="4" height="6" rx="1.3" fill="#fcfcfc" stroke="none"/></g><text x="710" y="45" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="14" fill="#fcfcfc">—</text>
+<text x="735" y="78" font-family="'Noto Sans','Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#a1a9b1" text-anchor="middle">Apagado</text>
+</svg>

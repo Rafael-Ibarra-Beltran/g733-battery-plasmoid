@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Id": "g733-battery",
+        "Name": "Batería G733",
+        "Description": "Muestra la batería del headset Logitech G733 en el panel",
+        "Icon": "audio-headset",
+        "Version": "1.0",
+        "License": "MIT",
+        "Category": "System Information",
+        "Authors": [
+            {
+                "Name": "Rafael"
+            }
+        ]
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
