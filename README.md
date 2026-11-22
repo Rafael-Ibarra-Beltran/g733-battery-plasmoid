@@ -37,7 +37,7 @@ Este proyecto añade un widget (plasmoide) al panel de KDE Plasma que lee el est
 - **Porcentaje siempre visible** en el panel, sin pasar el cursor por encima.
 - **Estado de carga:** ⚡ mientras carga y 🔌 cuando el cable está conectado pero ya no carga (batería llena).
 - **Aviso de batería baja:** por debajo del 15 % aparecen un ícono rojo y el número en rojo, sin ventanas emergentes.
-- **Porcentaje calibrado** a partir del voltaje, ajustado automáticamente a tu headset.
+- **Porcentaje igual al de G HUB**, calculado con la curva de batería del G733 que usa G HUB.
 - **Panel de detalle** al hacer clic, con el estado, el voltaje, la hora de la última lectura y un botón **Refrescar**.
 - **Lectura cada 60 segundos.**
 - **Sin dependencias:** solo QML de Plasma y Python 3 con su biblioteca estándar.
@@ -150,10 +150,10 @@ Se envía al receptor el reporte HID++ largo `11 ff 08 0a` seguido de 16 bytes e
 El headset no informa un porcentaje: solo el voltaje y si está descargando, cargando o lleno. El porcentaje se estima así:
 
 - **Llena:** 100 %.
-- **Descargando:** curva de descarga medida en un G933, desplazada para que el voltaje que *tu* headset reporta cuando está lleno corresponda al 100 %.
-- **Cargando:** curva de carga del G933. Nunca baja de la lectura anterior si esta tiene menos de 5 minutos, y no llega a 100 % hasta que el headset informa "llena".
+- **Descargando:** curva de descarga del G733 que usa G HUB, tomada de su archivo `battery_0afe.xml` (en `C:\ProgramData\LGHUB\depots\<n>\g733_0afe\`). Esa curva relaciona el voltaje con la energía descargada (3122 mWh en total), y el porcentaje es la energía que queda. Comparado con G HUB: 3766 mV → 49 %, y G HUB marcó 51 %.
+- **Cargando:** se muestra la última lectura hasta que el headset informa "llena". Mientras carga, el voltaje se queda casi fijo en ~3.99 V entre el 7 % y el 100 % (según la curva de carga del mismo archivo), así que no indica cuánto lleva.
 
-El voltaje de referencia se aprende solo cada vez que el headset está lleno con el cable conectado a la PC. Se guarda en `~/.local/state/g733-battery/state.json`. Hasta la primera carga completa, el porcentaje sale algo más bajo que el real.
+La última lectura se guarda en `~/.local/state/g733-battery/state.json`.
 
 > **¿Por qué no HeadsetControl?** Con el G733, [HeadsetControl](https://github.com/Sapd/HeadsetControl) solo reconoce el estado "cargando": una batería llena aparece igual que una que se descarga. Además usa una curva de voltaje genérica que muestra alrededor de un 68 % con el headset lleno.
 
@@ -180,7 +180,7 @@ g733-battery-plasmoid/
 | "Receptor no encontrado" | Comprueba que el receptor está conectado: `lsusb \| grep 046d:0afe`. |
 | `—` con el headset encendido | Acércalo al receptor y pulsa **Refrescar**. |
 | El widget no se actualiza tras `./install.sh` | Reinicia Plasma: `systemctl --user restart plasma-plasmashell`. |
-| El porcentaje no coincide con G HUB | Es una estimación por voltaje. Se ajusta tras una carga completa con el cable conectado a la PC. |
+| El porcentaje no coincide con G HUB | Puede haber 1-2 puntos de diferencia por el ruido del voltaje. Mientras carga, el widget muestra la última lectura y no el avance de la carga. |
 
 Para depurar, `python3 package/contents/code/g733-battery --raw` imprime además en stderr los bytes de la respuesta.
 
@@ -195,6 +195,7 @@ rm -r ~/.local/state/g733-battery
 ## Créditos
 
 - [g933-utils](https://github.com/ashkitten/g933-utils) (MIT, Copyright (c) 2019 ash lea): significado de los estados de batería y curvas de voltaje medidas.
+- Logitech G HUB: los puntos de la curva de descarga del G733 (`battery_0afe.xml`). El archivo no se incluye en este repositorio.
 - [HeadsetControl](https://github.com/Sapd/HeadsetControl): referencia de la petición HID++ para la familia G633/G933/G733.
 
 Logitech y G733 son marcas de Logitech. Este proyecto no está afiliado a Logitech.

@@ -14,10 +14,9 @@ se envía al receptor el reporte largo 11 ff 08 0a + 16 ceros y responde
 3 cargando, 7 llena (documentado por g933-utils). Si el tercer byte es 0xff,
 el headset está apagado o fuera de alcance.
 
-El headset no da un porcentaje, solo el voltaje. El porcentaje se estima con la
-curva de descarga medida de un G933 (g933-utils), desplazada para que el voltaje
-que este headset reporta cuando dice "llena" sea el 100 %. Ese voltaje se aprende
-solo y se guarda en $XDG_STATE_HOME/g733-battery/state.json.
+El headset no da un porcentaje, solo el voltaje. El porcentaje se calcula con
+la curva de descarga del G733 que usa G HUB (ver DISCHARGE). La última lectura se
+guarda en $XDG_STATE_HOME/g733-battery/state.json para mostrarla mientras carga.
 
 Uso: g733-battery [--raw]
 """
@@ -37,22 +36,15 @@ CHARGER_ID = ("046d", "0aff")  # "G733 Gaming Headset Battery Charger": solo exi
 REQUEST = bytes([0x11, 0xFF, 0x08, 0x0A]) + bytes(16)
 STATES = {1: "discharging", 3: "charging", 7: "full"}
 MIN_VALID_MV = 3000  # por debajo, el receptor responde sin un dato real (headset apagado)
-FLOOR_MAX_AGE_S = 300  # la última lectura solo sirve de suelo al cargar si es reciente
-
-# Curvas (mV, %) condensadas de libg933/src/maps/0A5B/discharging.csv y
-# charging_ascending.csv de g933-utils (https://github.com/ashkitten/g933-utils),
-# MIT License, Copyright (c) 2019 ash lea. Medidas en un G933.
+# Curva de descarga del G733 (mV, %) que usa G HUB, sacada de su archivo
+# battery_0afe.xml (voltaje contra energía descargada, 3122 mWh en total).
+# % = energía restante. Por encima de 3871 mV (primer punto medido) es 100 %.
 DISCHARGE = [
-    (3305, 0), (3536, 5), (3550, 10), (3575, 15), (3584, 20), (3595, 25), (3608, 30),
-    (3619, 35), (3630, 40), (3643, 45), (3660, 50), (3679, 55), (3703, 60), (3733, 65),
-    (3767, 70), (3802, 75), (3835, 80), (3882, 85), (3933, 90), (3978, 95), (4055, 100),
+    (3460, 0), (3506, 1), (3544, 2), (3575, 3), (3602, 4), (3626, 5), (3647, 6),
+    (3671, 8), (3678, 10), (3683, 15), (3688, 20), (3709, 25), (3725, 30), (3736, 35),
+    (3745, 40), (3755, 45), (3768, 50), (3777, 55), (3783, 60), (3790, 65), (3797, 70),
+    (3805, 75), (3814, 80), (3825, 85), (3836, 90), (3850, 95), (3871, 100),
 ]
-CHARGE = [
-    (3405, 0), (3859, 5), (3888, 10), (3918, 15), (3945, 20), (3962, 25), (3971, 30),
-    (3979, 35), (3988, 40), (4001, 45), (4018, 50), (4041, 55), (4066, 60), (4091, 65),
-    (4119, 70), (4150, 75), (4185, 80), (4225, 85), (4274, 90),
-]
-CURVE_FULL_MV = DISCHARGE[-1][0]
 
 
 def find_node(class_dir="/sys/class/hidraw"):
@@ -128,31 +120,17 @@ def interp(curve, mv):
     return float(curve[-1][1])
 
 
-def learn_full(full_mv, mv):
-    """Voltaje de referencia de "lleno". Justo después de cargar, el headset ya dice
-    "llena" pero el voltaje sale inflado y baja durante unos minutos: se sigue
-    rápido hacia abajo y muy despacio hacia arriba."""
-    if full_mv is None:
-        return float(mv)
-    if mv < full_mv:
-        return 0.5 * full_mv + 0.5 * mv
-    return 0.98 * full_mv + 0.02 * mv
-
-
-def estimate(state, mv, full_mv, last_pct):
-    """Porcentaje estimado. full_mv=None: curva sin desplazar. last_pct: lectura
-    reciente (o None) que sirve de suelo mientras carga."""
+def estimate(state, mv, last_pct):
+    """Porcentaje estimado, o None si no se puede saber. last_pct: última lectura
+    guardada (o None)."""
     if state == "full":
         return 100
-    offset = CURVE_FULL_MV - full_mv if full_mv is not None else 0
     if state == "charging":
-        # Al cargar el voltaje sube por la propia carga: curva de carga, sin bajar
-        # de la última lectura y sin llegar a 100 hasta que el headset diga "llena".
-        pct = interp(CHARGE, mv + offset)
-        if last_pct is not None:
-            pct = max(pct, last_pct)
-        return min(99, round(pct))
-    return max(0, min(100, round(interp(DISCHARGE, mv + offset))))
+        # Al cargar, el voltaje se queda casi fijo en ~3.99 V del 7 % al 100 % (curva
+        # de carga de G HUB), así que no dice cuánto lleva. Se mantiene la última
+        # lectura hasta que el headset diga "llena".
+        return None if last_pct is None else min(99, last_pct)
+    return max(0, min(100, round(interp(DISCHARGE, mv))))
 
 
 def state_path():
@@ -203,16 +181,10 @@ def main(argv):
                 state = STATES.get(d[6], "unknown")
                 path = state_path()
                 saved = load_state(path)
-                full_mv = saved.get("full_mv")
-                if state == "full" and out["cable"]:
-                    # Solo con el cable puesto: así el valor aprendido es el de "lleno"
-                    # aunque el headset tarde en dejar de decir "llena" al desconectarlo.
-                    full_mv = learn_full(full_mv, mv)
                 now = time.time()
-                recent = now - saved.get("last_ts", 0) <= FLOOR_MAX_AGE_S
-                pct = estimate(state, mv, full_mv, saved.get("last_pct") if recent else None)
+                pct = estimate(state, mv, saved.get("last_pct"))
                 try:
-                    save_state(path, {"full_mv": full_mv, "last_pct": pct, "last_ts": now})
+                    save_state(path, {"last_pct": pct, "last_ts": now})
                 except OSError:
                     pass
                 out.update(status="ok", state=state, voltage_mv=mv, battery=pct)
