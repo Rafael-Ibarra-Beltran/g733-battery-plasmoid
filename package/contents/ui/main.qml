@@ -100,8 +100,10 @@ PlasmoidItem {
     }
 
     compactRepresentation: MouseArea {
-        Layout.minimumWidth: row.implicitWidth
-        Layout.preferredWidth: row.implicitWidth
+        // Margen a los lados para que el ícono y el texto no toquen el borde del fondo.
+        readonly property int hPadding: Kirigami.Units.largeSpacing
+        Layout.minimumWidth: row.implicitWidth + 2 * hPadding
+        Layout.preferredWidth: row.implicitWidth + 2 * hPadding
         onClicked: root.expanded = !root.expanded
 
         RowLayout {
